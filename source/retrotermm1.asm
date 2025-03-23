@@ -65,6 +65,11 @@ PPI.BR		EQU &hA9
 PPI.CW		EQU &hAA
 PPI.CR		EQU &hAA
 
+;   BITBANG SERIAL
+PP.CNTRL    EQU $90
+PP.DATA     EQU $91
+
+
 ;	i8251	USART
 USARTData	EQU &h80		; Write: Tx - Read: Rx
 USARTCmd	EQU	&h81		; Mode format (Async mode - Write):
@@ -150,16 +155,29 @@ AYREAD		EQU &hA2
 
 
 ; BDOS
-CWRITE		EQU	2		; console output
-RAWIO		EQU	6		; direct console I/O
-CONOUT		EQU	9		; console output
-WRITESTR	EQU	9		; output string
-READSTR		EQU	10		; buffered console input
-SELDSK		EQU	24		; pass disk no. in c
-SETDMA		EQU	33		; pass address in bc
-SETTRK		EQU	27		; pass track in reg C
-SETSEC		EQU	30		; pass sector in reg c
-WRITE		EQU	39		; write one CP/M sector to disk
+
+;CWRITE		EQU	2		; console output
+;RAWIO		EQU	6		; direct console I/O
+;WRITESTR	EQU	9		; output string
+;READSTR	EQU	10		; buffered console input
+;SETDMA		EQU	33		; pass address in bc
+;SETTRK		EQU	27		; pass track in reg C
+;SETSEC		EQU	30		; pass sector in reg c
+;WRITE		EQU	39		; write one CP/M sector to disk
+
+;_CONOUT     EQU &h02    ; console output
+_DIRIO      EQU &h06    ; direct console I/O
+_STROUT     EQU &h09    ; output string
+;_BUFIN      EQU &h0A    ; buffered console input
+_SELDSK     EQU &h0E    ; select current disk
+_SFIRST     EQU &h11    ; search for first fcb
+_FMAKE      EQU &h16    ; create a new file
+_LOGIN		EQU	&h18    ; pass disk no. in c
+_CURDRV     EQU &h19    ; get current drive
+_FCLOSE     EQU &h10    ; close file
+_SETDTA     EQU &H1A    ; set disk transfer address
+_WRBLK      EQU &H26    ; write block 
+
 
 ; Constants
 MAXCMD		EQU	&hB7	; Highest command implemented
@@ -242,7 +260,7 @@ ENDM
 
 
 Start:
-	LD		C,WRITESTR
+	LD		C,_STROUT
 	LD		DE,INTRO
 	CALL	BDOS
 .s0
@@ -1972,7 +1990,7 @@ SendByte:
 	LD	C,8			; Vamos a enviar 8 bits
 	XOR	A			; Coloca un 0 en A
 SendStart:
-	OUT	($90),A			; Escribe el valor a TX (start)
+	OUT	(PP.CNTRL),A			; Escribe el valor a TX (start)
 					; *** Comienzo del bit de start ***
 	XOR 0				; 7+1 Pierde 18 ciclos para completar los 62 del bit de start
 	NOP				; 4+1
@@ -1983,7 +2001,7 @@ SBLoop:
 
 	RR	B			; 8+2 Obtiene en CARRY el bit 0 del byte a enviar
 	RL	A			; 8+2 Copia CARRY al bit 0 de A
-	OUT	($90),A			; 11+1 Escribe el valor a TX (bit 0)
+	OUT	(PP.CNTRL),A			; 11+1 Escribe el valor a TX (bit 0)
 					; *** Comienzo del bit ***
 	DEC	C			; 4+1 Decrementa C
 	JR	NZ,SBLoop		; 12+1 Si C no llego a 0, vuelve a SBLoop
@@ -1996,7 +2014,7 @@ SBLoop:
 
 	LD	A,%00000001		; 7+1 Coloca TX en 1
 SendStop:
-	OUT	($90),A			; 11+1 Escribe el valor a TX (bit 0)
+	OUT	(PP.CNTRL),A			; 11+1 Escribe el valor a TX (bit 0)
 					; *** Comienzo del bit de stop ***
 	POP		BC		; Retreive registers
 	POP		HL
@@ -2021,7 +2039,7 @@ SendByte:
 	LD	C,8			; Vamos a enviar 8 bits
 	XOR	A			; Coloca un 0 en A
 SendStart:
-	OUT	($90),A			; Escribe el valor a TX (start)
+	OUT	(PP.CNTRL),A			; Escribe el valor a TX (start)
 					; *** Comienzo del bit de start ***
 	XOR 0				; 7+1 Pierde 18 ciclos para completar los 62 del bit de start
 	NOP				; 4+1
@@ -2038,7 +2056,7 @@ SBLoop:
 
 	RR	B			; 8+2 Obtiene en CARRY el bit 0 del byte a enviar
 	RL	A			; 8+2 Copia CARRY al bit 0 de A
-	OUT	($90),A			; 11+1 Escribe el valor a TX (bit 0)
+	OUT	(PP.CNTRL),A			; 11+1 Escribe el valor a TX (bit 0)
 					; *** Comienzo del bit ***
 	DEC	C			; 4+1 Decrementa C
 	JR	NZ,SBLoop		; 12+1 Si C no llego a 0, vuelve a SBLoop
@@ -2055,7 +2073,7 @@ SBLoop:
 
 	LD	A,%00000001		; 7+1 Coloca TX en 1
 SendStop:
-	OUT	($90),A			; 11+1 Escribe el valor a TX (bit 0)
+	OUT	(PP.CNTRL),A			; 11+1 Escribe el valor a TX (bit 0)
 					; *** Comienzo del bit de stop ***
 	POP		BC		; Retreive registers
 	POP		HL
@@ -2087,7 +2105,7 @@ IF IFACE = 56
 .rts0
 	LD	L,LONGRX		; Vamos a esperar CANCELTIME (1 milisegundo) antes de cancelar la recepcion
 	XOR	A				; Activamos RTS colocandolo a cero
-	OUT	($91),A
+	OUT	(PP.DATA),A
 	JP	.rts1
 
 ReadByte:
@@ -2095,14 +2113,14 @@ ReadByte2:
 .norts
 	LD	L,LONGRX		; Vamos a esperar CANCELTIME (1 milisegundos) antes de cancelar la recepcion
 	XOR	A			; Activamos RTS colocandolo a cero
-	OUT	($91),A
+	OUT	(PP.DATA),A
 	NOP
 	; NOP
 .rts1
 	LD	A,1				; 7+1 Desactivamos RTS colocandolo a uno
-	OUT	($91),A			; 11+1
+	OUT	(PP.DATA),A			; 11+1
 WaitStrt2:				; *** Esperamos un byte con RTS desactivado ***
-	IN	A,($90)			; 11+1 Leemos la entrada RX (aca llevamos 15 ciclos de retraso con respecto al bucle normal)
+	IN	A,(PP.CNTRL)			; 11+1 Leemos la entrada RX (aca llevamos 15 ciclos de retraso con respecto al bucle normal)
 	AND	%00000010		; 7+1 (bit 1)
 	JR	Z,StartBit2		; 12+1 Si RX = 0 seguimos en StartBit2
 					; 7+1 sino
@@ -2115,7 +2133,7 @@ WaitStrt2:				; *** Esperamos un byte con RTS desactivado ***
 StartBit2:				; *** StartBit con RTS desactivado ***
 	INC	IY			; 10+2 Pierde 48 ciclos
 	DEC	IY			; 10+2
-	LD	BC,$90			; 10+1 BC = puerto $90
+	LD	BC,PP.CNTRL			; 10+1 BC = puerto PP.CNTRL
 	LD	H,8			; 7+1 Vamos a recibir 8 bits
 ReadBit:
 	IN	A,(C)			; 12+2 Leemos la entrada RX
@@ -2145,12 +2163,12 @@ ReadByte:
 ReadByte2:
 .norts
 	LD	L,RTSTIME		; Vamos a activar RTS durante RTSTIME
-	LD	BC,$90			; 10+1 BC = puerto $90
+	LD	BC,PP.CNTRL			; 10+1 BC = puerto PP.CNTRL
 	LD	H,8			; 7+1 Vamos a recibir 8 bits
 	XOR	A				; Activamos RTS colocandolo a cero
-	OUT	($91),A
+	OUT	(PP.DATA),A
 WaitStrt1:				; *** Esperamos un byte con RTS activado ***
-	IN	A,($90)			; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)			; 11+1 Leemos la entrada RX
 	AND	%00000010		; 7+1 (bit 1)
 	JR	Z,StartBit1		; 12+1 Si RX = 0 seguimos en StartBit1
 						; 7+1 sino
@@ -2160,11 +2178,11 @@ WaitStrt1:				; *** Esperamos un byte con RTS activado ***
 
 
 	LD	A,1				; 7+1 Desactivamos RTS colocandolo a uno
-	OUT	($91),A			; 11+1
+	OUT	(PP.DATA),A			; 11+1
 .rts0
 	LD	L,LONGRX		; Vamos a esperar CANCELTIME (1 milisegundos) antes de cancelar la recepcion
 WaitStrt2:				; *** Esperamos un byte con RTS desactivado ***
-	IN	A,($90)			; 11+1 Leemos la entrada RX (aca llevamos 15 ciclos de retraso con respecto al bucle normal)
+	IN	A,(PP.CNTRL)			; 11+1 Leemos la entrada RX (aca llevamos 15 ciclos de retraso con respecto al bucle normal)
 	AND	%00000010		; 7+1 (bit 1)
 	JR	Z,StartBit2		; 12+1 Si RX = 0 seguimos en StartBit2
 					; 7+1 sino
@@ -2176,7 +2194,7 @@ WaitStrt2:				; *** Esperamos un byte con RTS desactivado ***
 
 StartBit1:				; *** StartBit con RTS activado ***
 	LD	A,1			; 7+1 Desactivamos RTS colocandolo a uno
-	OUT	($91),A			; 11+1
+	OUT	(PP.DATA),A			; 11+1
 StartBit2:				; *** StartBit con RTS desactivado ***
 	LD	H,8			; 7+1 Delay para caer dentro del bit 0
 	LD	H,8			; 7+1
@@ -2424,14 +2442,14 @@ Delay51:
 
 TurboRX:
 	LD	B,$07			; 7+1 B=7
-	LD	C,$90			; 7+1 Carga C con el puerto $90
+	LD	C,PP.CNTRL			; 7+1 Carga C con el puerto PP.CNTRL
 	LD	L,%10001000		; Comenzamos con 2 muestras de valor medio
 	LD	A,8			; 7+1 Selecciona el registro 8 (VOL1)
 	OUT	(AYINDEX), A		; 11+1
 	XOR	A			; Activamos RTS colocandolo a cero
-	OUT	($91),A
+	OUT	(PP.DATA),A
 TurboLoop:				; *** Esperamos un byte con RTS activado ***
-	IN	A,($90)			; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)			; 11+1 Leemos la entrada RX
 	AND	%00000010		; 7+1 (bit 1)
 	JP	NZ,TurboLoop		; 10+1 Si RX = 1 volvemos a TurboLoop
 StartBit:				; Duracion: 63 ciclos (para caer dentro del bit 0)
@@ -2467,7 +2485,7 @@ TurboB0:			; *** Total: 94 ciclos (+1) ***
 	NOP				; 4+1
 
 TurboB1:			; *** Total: 93 ciclos *** 
-	IN	A,($90)		; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)		; 11+1 Leemos la entrada RX
 	RR	A			; 8+2 Obtiene en CARRY el bit recibido
 	RR	A			; 8+2
 	RR	L			; 8+2 Agrega el bit recibido al registro L
@@ -2476,7 +2494,7 @@ TurboB1:			; *** Total: 93 ciclos ***
 	CALL	Delay51			; 17+1 + 33
 
 TurboB2:			; *** Total: 93 ciclos *** 
-	IN	A,($90)		; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)		; 11+1 Leemos la entrada RX
 	RR	A			; 8+2 Obtiene en CARRY el bit recibido
 	RR	A			; 8+2
 	RR	L			; 8+2 Agrega el bit recibido al registro L
@@ -2491,7 +2509,7 @@ TurboB2:			; *** Total: 93 ciclos ***
 	RET	NC			; 5+1
 
 TurboB3:			; *** Total: 93 ciclos *** 
-	IN	A,($90)		; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)		; 11+1 Leemos la entrada RX
 	RR	A			; 8+2 Obtiene en CARRY el bit recibido
 	RR	A			; 8+2
 	RR	L			; 8+2 Agrega el bit recibido al registro L
@@ -2523,7 +2541,7 @@ TurboB4:			; *** Total: 94 ciclos (+1) ***
 	NOP				; 4+1
 
 TurboB5:			; *** Total: 93 ciclos *** 
-	IN	A,($90)		; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)		; 11+1 Leemos la entrada RX
 	RR	A			; 8+2 Obtiene en CARRY el bit recibido
 	RR	A			; 8+2
 	RR	L			; 8+2 Agrega el bit recibido al registro L
@@ -2532,7 +2550,7 @@ TurboB5:			; *** Total: 93 ciclos ***
 	CALL	Delay51			; 17+1 + 33
 
 TurboB6:			; *** Total: 93 ciclos *** 
-	IN	A,($90)		; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)		; 11+1 Leemos la entrada RX
 	RR	A			; 8+2 Obtiene en CARRY el bit recibido
 	RR	A			; 8+2
 	RR	L			; 8+2 Agrega el bit recibido al registro L
@@ -2541,7 +2559,7 @@ TurboB6:			; *** Total: 93 ciclos ***
 	CALL	Delay51			; 17+1 + 33
 
 TurboB7:			; *** Total: 134 ciclos (+41) ***
-	IN	A,($90)		; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)		; 11+1 Leemos la entrada RX
 	RR	A			; 8+2 Obtiene en CARRY el bit recibido
 	RR	A			; 8+2
 	RR	L			; 8+2 Agrega el bit recibido al registro L
@@ -2564,12 +2582,12 @@ TurboB7:			; *** Total: 134 ciclos (+41) ***
 ; Presionamos STOP, vamos a enviar un byte de valor 255 sincronizado con el siguiente byte
 
 StopStream:
-	IN	A,($90)			; 11+1 Leemos la entrada RX
+	IN	A,(PP.CNTRL)			; 11+1 Leemos la entrada RX
 	AND	%00000010		; 7+1 (bit 1)
 	JP	NZ,StopStream		; 10+1 Si RX = 1 volvemos a StopStream
 
 	XOR	A			; 4+1 Coloca la salida TX (bit 0) en 0 (para generar un bit de start)
-	OUT	($90),A			; 11+1
+	OUT	(PP.CNTRL),A			; 11+1
 	; Start bit (93 ciclos)
 	CALL	Delay51			; 17+1 + 33
 	SCF				; 4+1 Pierde 22 ciclos
@@ -2577,7 +2595,7 @@ StopStream:
 	SCF				; 4+1
 	RET	NC			; 5+1
 	LD	A,1			; 7+1 Coloca la salida TX (bit 0) en 1 (fin del bit de start)
-	OUT	($90),A			; 11+1
+	OUT	(PP.CNTRL),A			; 11+1
 
 	; Data (Espera para llegar al bit de stop y volver a recibir datos)
 	CALL	Delay51			; 17+1 + 33
@@ -2598,7 +2616,7 @@ StopStream:
 	JP	TurboLoop		; 10+1
 TurboExit:
 	LD	A,1			; 7+1 Desactivamos RTS colocandolo a uno
-	OUT	($91),A			; 11+1
+	OUT	(PP.DATA),A			; 11+1
 	JP	PSGIni
 ENDIF
 
@@ -2706,7 +2724,7 @@ WaitKey:
 ; Get key press, .A = 0 if none
 
 GetKey:
-	LD	C,RAWIO		; Direct keyboard read
+	LD	C,_DIRIO		; Direct keyboard read
 	LD	DE,&h0FF	; FFh: Only return the character, dont print it
 	CALL	BDOS
 	RET
@@ -4076,7 +4094,7 @@ bsave
 	LD		HL,bst1				; Print download screen
 	CALL	StrOut
 
-	LD		C,&h19
+	LD		C,_CURDRV          ; get current drive
 	CALL	BDOS
 	LD		(_prevdrv),A		; Save current default drive
 	LD		(_curdrv),A
@@ -4134,7 +4152,7 @@ bsave
 	CALL 	UBlock
 	CALL	URetry
 
-    LD      C,&h18              ; GetLoginVector
+    LD      C,_LOGIN      ; GetLoginVector (available drives)
     CALL    BDOS
 	; L = Available drives
 	LD		A,L
@@ -4281,7 +4299,7 @@ ENDIF
 	CALL	StrOut
 	LD		A,(_curdrv)
 	LD		E,A
-	LD		C,&h0E
+	LD		C,_SELDSK    ; Select Current Disk
 	CALL	BDOS		; Change default drive
 
 .bo1
@@ -4289,12 +4307,12 @@ ENDIF
 	LD		A,0	;(_curdrv)
 	; INC		A
 	CALL	FillFCB		; Init FCB
-	LD      C,&h11      ;Search First (FCB)
+	LD      C,_SFIRST      ;Search First (FCB)
     LD      DE,FILEFCB
     CALL    BDOS
     CP      &hFF
     JR      NZ,.abrt	;Abort if file found
-    LD      C,&h16		;Create file (FCB)
+    LD      C,_FMAKE 	;Create file (FCB)
     LD      DE,FILEFCB
     CALL    BDOS
     CP      0
@@ -4316,20 +4334,20 @@ ENDIF
 
 .bc	;Close file
 	LD      DE,FILEFCB
-    LD      C,&h10		; Close file (FCB)
+    LD      C,_FCLOSE		; Close file (FCB)
     CALL    BDOS
 	RET
 
 bwrite	; Write data
 	LD		DE,BBUF
-	LD      C,&h1A		; Set Disk Transfer Address
+	LD      C,_SETDTA		; Set Disk Transfer Address
     CALL    BDOS
     LD      DE,FILEFCB
     LD      HL,(BSIZE)	; Number of records (byte count in this case)
 	LD		A,H
 	LD		H,L
 	LD		L,A
-    LD      C,&h26		; Random block write (FCB)
+    LD      C,_WRBLK		; Random block write (FCB)
     CALL    BDOS
 	CP		0
 	JR		NZ,.abrt	; Error writing to disk, Abort
